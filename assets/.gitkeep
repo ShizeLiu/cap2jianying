@@ -1,0 +1,1 @@
+# 占位：录屏/导入剪映主流程不依赖根目录 assets 内大文件；保留目录供 PyInstaller 打入 jy_skill/assets。

@@ -1,6 +1,52 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 Set-Location -LiteralPath $PSScriptRoot
+
+# 打包数据路径：独立仓库为 .\scripts / .\assets；若在 jianying-editor-skill 内则为 ..\scripts
+function Resolve-JyScriptsDir {
+  $candidates = @(
+    (Join-Path $PSScriptRoot "scripts"),
+    (Join-Path (Join-Path $PSScriptRoot "..") "scripts")
+  )
+  foreach ($c in $candidates) {
+    $full = [System.IO.Path]::GetFullPath($c)
+    if (Test-Path (Join-Path $full "jy_wrapper.py")) {
+      return $full
+    }
+  }
+  return $null
+}
+
+function Resolve-JyAssetsDir {
+  $candidates = @(
+    (Join-Path $PSScriptRoot "assets"),
+    (Join-Path (Join-Path $PSScriptRoot "..") "assets")
+  )
+  foreach ($c in $candidates) {
+    $full = [System.IO.Path]::GetFullPath($c)
+    if (Test-Path $full) {
+      return $full
+    }
+  }
+  return $null
+}
+
+$SCRIPTS_SRC = Resolve-JyScriptsDir
+if (-not $SCRIPTS_SRC) {
+  throw "Could not find scripts/ (need jy_wrapper.py). Copy jianying-editor-skill/scripts into ./scripts or place this repo next to that monorepo."
+}
+$ASSETS_SRC = Resolve-JyAssetsDir
+if (-not $ASSETS_SRC) {
+  throw "Could not find assets/. Copy jianying-editor-skill/assets into ./assets or use monorepo layout with ../assets."
+}
+$PJ_DRAFT_ASSETS = Join-Path $SCRIPTS_SRC "vendor\pyJianYingDraft\assets"
+if (-not (Test-Path $PJ_DRAFT_ASSETS)) {
+  throw ("Missing pyJianYingDraft assets folder: " + $PJ_DRAFT_ASSETS)
+}
+$SMART_ZOOM_SRC = Join-Path $PSScriptRoot "overrides\smart_zoomer.py"
+if (-not (Test-Path $SMART_ZOOM_SRC)) {
+  throw ("Missing overrides/smart_zoomer.py: " + $SMART_ZOOM_SRC)
+}
 
 function Assert-Command($name) {
   if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
@@ -47,12 +93,17 @@ if (Test-Path .\dist_out) {
     try { Move-Item -Force .\dist_out $bak } catch { }
   }
 }
-if (Test-Path .\*.spec) { Remove-Item -Force .\*.spec }
+# 使用命令行参数打包，不依赖每次生成 spec；保留仓库中的 VideoRecorderOnly.spec 供参考
 
 Write-Host "==> Building (onedir)..." -ForegroundColor Cyan
 
 $ts = Get-Date -Format "yyyyMMdd_HHmmss"
 $DISTPATH = ".\\dist_out_$ts"
+# 避免 PyInstaller 每次在仓库根目录覆盖手写版 VideoRecorderOnly.spec
+$SPECPATH_STAGING = Join-Path $PSScriptRoot "build\\pyi_spec_staging"
+if (-not (Test-Path $SPECPATH_STAGING)) {
+  New-Item -ItemType Directory -Path $SPECPATH_STAGING -Force | Out-Null
+}
 
 # Notes:
 # - onedir: outputs a folder (exe + dlls)
@@ -61,11 +112,11 @@ $DISTPATH = ".\\dist_out_$ts"
 & $VENV_PY -m PyInstaller `
   --noconfirm `
   --clean `
+  --specpath $SPECPATH_STAGING `
   --onedir `
   --windowed `
   --distpath $DISTPATH `
   --name "VideoRecorderOnly" `
-  --collect-all tkinter `
   --hidden-import difflib `
   --hidden-import asyncio `
   --hidden-import asyncio.events `
@@ -80,10 +131,10 @@ $DISTPATH = ".\\dist_out_$ts"
   --hidden-import jy_wrapper `
   --hidden-import smart_zoomer `
   --hidden-import pyJianYingDraft `
-  --add-data "..\scripts;jy_skill\scripts" `
-  --add-data "..\assets;jy_skill\assets" `
-  --add-data ".\overrides\smart_zoomer.py;jy_skill\overrides" `
-  --add-data "..\scripts\vendor\pyJianYingDraft\assets;jy_skill\scripts\vendor\pyJianYingDraft\assets" `
+  --add-data ($SCRIPTS_SRC + ";jy_skill\scripts") `
+  --add-data ($ASSETS_SRC + ";jy_skill\assets") `
+  --add-data ($SMART_ZOOM_SRC + ";jy_skill\overrides") `
+  --add-data ($PJ_DRAFT_ASSETS + ";jy_skill\scripts\vendor\pyJianYingDraft\assets") `
   .\recorder.py
 
 if ($LASTEXITCODE -ne 0) {

@@ -1,11 +1,19 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_all
+import os
 
-datas = [('..\\scripts', 'jy_skill\\scripts'), ('..\\assets', 'jy_skill\\assets'), ('.\\overrides\\smart_zoomer.py', 'jy_skill\\overrides'), ('..\\scripts\\vendor\\pyJianYingDraft\\assets', 'jy_skill\\scripts\\vendor\\pyJianYingDraft\\assets')]
+_spec_dir = os.path.dirname(os.path.abspath(SPEC))
+_scripts = os.path.join(_spec_dir, "scripts")
+_assets = os.path.join(_spec_dir, "assets")
+_over = os.path.join(_spec_dir, "overrides", "smart_zoomer.py")
+_pjd_assets = os.path.join(_scripts, "vendor", "pyJianYingDraft", "assets")
+datas = [
+    (_scripts, "jy_skill\\scripts"),
+    (_assets, "jy_skill\\assets"),
+    (_over, "jy_skill\\overrides"),
+    (_pjd_assets, "jy_skill\\scripts\\vendor\\pyJianYingDraft\\assets"),
+]
 binaries = []
 hiddenimports = ['difflib', 'asyncio', 'asyncio.events', 'asyncio.base_events', 'pymediainfo', 'uiautomation', 'comtypes', 'win32ctypes', 'pynput', 'pynput.mouse', 'pynput.keyboard', 'jy_wrapper', 'smart_zoomer', 'pyJianYingDraft']
-tmp_ret = collect_all('tkinter')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(

@@ -442,9 +442,10 @@ class VideoRecorderApp:
 
     def open_ffmpeg_download(self):
         """
-        打开 FFmpeg 稳定版下载页面（Windows）。
+        打开 FFmpeg 官方下载索引页（汇总 Windows 常用预编译来源，避免单一镜像失效）。
         """
-        url = "https://www.gyan.dev/ffmpeg/builds"
+        # 官方页面同时列出 BtbN、gyan.dev 等 Windows 构建入口，比直连单个第三方站点更稳
+        url = "https://ffmpeg.org/download.html"
         try:
             webbrowser.open(url)
         except Exception:
@@ -454,12 +455,12 @@ class VideoRecorderApp:
         """
         未检测到 FFmpeg 时的提示：给出可点击下载入口。
         """
-        url = "https://www.gyan.dev/ffmpeg/builds"
+        url = "https://ffmpeg.org/download.html"
         msg = (
             "当前启动环境未检测到 ffmpeg。\n\n"
             "你可以：\n"
             "1) 点击“选择…”指定 ffmpeg.exe\n"
-            "2) 或点击“下载FFmpeg”打开稳定版下载页并安装后再试\n\n"
+            "2) 或点击“下载FFmpeg”打开 FFmpeg 官方下载页（含 Windows 预编译链接）后再试\n\n"
             f"下载页：{url}"
         )
         try:
@@ -502,7 +503,7 @@ class VideoRecorderApp:
             extra = (
                 "\n\n【判读提示】日志中的 “Could not enumerate …” 通常表示 DirectShow（dshow）在该会话无法枚举硬件。"
                 "本程序已自动尝试 WASAPI / OpenAL（若你的 ffmpeg 编译包含这些输入）。若仍为空，请检查："
-                "Windows「设置 → 隐私 → 麦克风」、音频服务、声卡驱动；并尽量使用 gyan.dev 等完整构建的 ffmpeg。"
+                "Windows「设置 → 隐私 → 麦克风」、音频服务、声卡驱动；并尽量使用 FFmpeg 官方下载页推荐的完整构建（full / essentials）。"
             )
         messagebox.showerror(
             "麦克风枚举失败",
@@ -1032,6 +1033,32 @@ class VideoRecorderApp:
                 if not wrapper or not py:
                     return
 
+            def _ensure_skill_paths(wrapper_path: str) -> None:
+                """
+                确保剪映技能脚本在源码运行时可被 import：
+                - scripts/ 下的 jy_wrapper.py、smart_zoomer.py
+                - scripts/vendor/ 下 vendored 的 pyJianYingDraft 等
+                """
+                try:
+                    wp = Path(wrapper_path).resolve()
+                    # wrapper 通常位于 <root>/scripts/jy_wrapper.py
+                    root = wp.parent.parent if wp.name.lower() == "jy_wrapper.py" else Path(__file__).resolve().parent
+                    scripts_dir = root / "scripts"
+                    vendor_dir = scripts_dir / "vendor"
+
+                    if scripts_dir.exists():
+                        os.environ.setdefault("JY_SKILL_ROOT", str(root))
+                        s = str(scripts_dir)
+                        if s not in sys.path:
+                            sys.path.insert(0, s)
+                    if vendor_dir.exists():
+                        v = str(vendor_dir)
+                        if v not in sys.path:
+                            sys.path.insert(0, v)
+                except Exception:
+                    # 兜底：不阻断导入流程，后续自检会给出缺失项
+                    pass
+
             def _dependency_self_check() -> list[str]:
                 """
                 依赖自检（一次性列出缺失项，避免“点一次缺一个库”的循环）。
@@ -1043,6 +1070,8 @@ class VideoRecorderApp:
                 import importlib
 
                 missing: list[str] = []
+                # 源码运行时：先把 ./scripts 与 ./scripts/vendor 加入 sys.path
+                _ensure_skill_paths(wrapper)
                 modules = [
                     # 标准库（理论上应存在，但为防打包漏掉）
                     "asyncio",
@@ -1166,8 +1195,18 @@ class VideoRecorderApp:
                             "--scale",
                             "150",
                         ]
+                        # Windows 终端默认可能是 GBK；强制子进程用 UTF-8，避免脚本输出包含特殊字符时报错
+                        env = os.environ.copy()
+                        env["PYTHONIOENCODING"] = "utf-8"
+                        env["PYTHONUTF8"] = "1"
                         proc = subprocess.run(
-                            cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=120
+                            cmd,
+                            capture_output=True,
+                            text=True,
+                            encoding="utf-8",
+                            errors="ignore",
+                            timeout=120,
+                            env=env,
                         )
                         out = (proc.stdout or "") + "\n" + (proc.stderr or "")
 

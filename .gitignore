@@ -14,3 +14,6 @@ __pycache__/
 dist_out_*/
 logs/
 *.log
+
+# 本地配置（包含机器路径，不入库）
+recorder_config.json
