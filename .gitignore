@@ -1,0 +1,16 @@
+# 本地录制产物（避免误提交）
+*.mp4
+ffmpeg_log.txt
+
+# PyInstaller 产物
+build/
+dist/
+
+# 本地构建与环境（不入库）
+.venv_build/
+__pycache__/
+*.py[cod]
+*$py.class
+dist_out_*/
+logs/
+*.log

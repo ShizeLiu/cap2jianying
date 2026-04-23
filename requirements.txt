@@ -1,0 +1,8 @@
+# 仅录制视频（精简版）依赖
+#
+# 说明：
+# - 本目录的 recorder.py 不依赖 pynput / pyJianYingDraft 等剪映 skill 组件
+# - 仍需要系统已安装 ffmpeg，并能在命令行直接运行 `ffmpeg`
+
+# 运行依赖（源码运行时用；打包时依赖见 requirements-dev.txt）
+pynput
