@@ -66,6 +66,8 @@ class VideoRecorderApp:
         self.config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "recorder_config.json")
         self.output_dir = os.path.abspath(os.getcwd())
         self.ffmpeg_path = ""
+        # 清晰度：影响编码参数（preset/crf），默认取“高”（更清晰）
+        self.quality_level = "高"
         self._last_audio_enum_log = ""
         # 下拉框展示名 -> {"fmt": "dshow|wasapi|openal", "iarg": "传给 ffmpeg -i 的完整参数字符串"}
         self.audio_route: dict[str, dict[str, str]] = {}
@@ -97,6 +99,7 @@ class VideoRecorderApp:
 
         self.output_dir_var = tk.StringVar(value=self.output_dir)
         self.ffmpeg_var = tk.StringVar(value=self.ffmpeg_path or "")
+        self.quality_var = tk.StringVar(value=self.quality_level)
 
         # ---- 主界面 ----
         self.main_frame = tk.Frame(self.root, bg="#2c3e50")
@@ -186,18 +189,6 @@ class VideoRecorderApp:
         )
         self.ffmpeg_btn.grid(row=0, column=1, padx=(10, 0), ipady=1)
 
-        self.refresh_audio_btn = tk.Button(
-            ff_row,
-            text="刷新麦克风",
-            command=self.reload_audio_devices,
-            bg="#34495e",
-            fg="white",
-            font=("Microsoft YaHei", 9),
-            relief="flat",
-            padx=10,
-        )
-        self.refresh_audio_btn.grid(row=0, column=2, padx=(10, 0), ipady=1)
-
         # FFmpeg 下载按钮（打开浏览器）
         self.download_ffmpeg_btn = tk.Button(
             ff_row,
@@ -211,19 +202,28 @@ class VideoRecorderApp:
         )
         self.download_ffmpeg_btn.grid(row=0, column=3, padx=(10, 0), ipady=1)
 
-        # 麦克风
-        mic_frame = tk.Frame(settings_inner, bg="#2f4153")
-        mic_frame.pack(pady=(0, 8), fill=tk.X)
+        # 麦克风 + 清晰度：同一行展示
+        mic_quality_row = tk.Frame(settings_inner, bg="#2f4153")
+        mic_quality_row.pack(pady=(0, 8), fill=tk.X)
+        mic_quality_row.grid_columnconfigure(0, weight=1)
+        mic_quality_row.grid_columnconfigure(1, weight=1)
+
+        mic_frame = tk.Frame(mic_quality_row, bg="#2f4153")
+        mic_frame.grid(row=0, column=0, sticky="ew", padx=(0, 10))
         mic_frame.grid_columnconfigure(0, weight=1)
 
-        tk.Label(
+        # 用“刷新麦克风”按钮替换标题“麦克风”，更紧凑也更一致
+        self.refresh_audio_btn = tk.Button(
             mic_frame,
-            text="麦克风",
-            fg="#aeb9c5",
-            bg="#2f4153",
+            text="刷新麦克风",
+            command=self.reload_audio_devices,
+            bg="#34495e",
+            fg="white",
             font=("Microsoft YaHei", 9),
-            anchor="w",
-        ).grid(row=0, column=0, sticky="w", pady=(0, 6))
+            relief="flat",
+            padx=10,
+        )
+        self.refresh_audio_btn.grid(row=0, column=0, sticky="w", pady=(0, 6))
 
         # 始终使用 combobox（即使为空也可后续刷新）
         self.audio_combo = ttk.Combobox(
@@ -234,6 +234,46 @@ class VideoRecorderApp:
             style="JY.TCombobox",
         )
         self.audio_combo.grid(row=1, column=0, sticky="ew", ipady=3)
+
+        quality_frame = tk.Frame(mic_quality_row, bg="#2f4153")
+        quality_frame.grid(row=0, column=1, sticky="ew", padx=(10, 0))
+        quality_frame.grid_columnconfigure(0, weight=1)
+
+        # 标题也做成“按钮外观”，提升一致性（仅作展示，不可点击）
+        tk.Label(
+            quality_frame,
+            text="清晰度",
+            bg="#34495e",
+            fg="white",
+            font=("Microsoft YaHei", 9),
+            anchor="w",
+            padx=10,
+            pady=2,
+            relief="flat",
+        ).grid(row=0, column=0, sticky="w", pady=(0, 6))
+
+        # 单选框（圆点形式）
+        quality_row = tk.Frame(quality_frame, bg="#2f4153")
+        quality_row.grid(row=1, column=0, sticky="ew")
+
+        rb_style = {
+            "bg": "#2f4153",
+            "fg": "#ecf0f1",
+            "activebackground": "#2f4153",
+            "activeforeground": "#ecf0f1",
+            "selectcolor": "#34495e",
+            "font": ("Microsoft YaHei", 9),
+            "padx": 6,
+        }
+        tk.Radiobutton(quality_row, text="高", variable=self.quality_var, value="高", **rb_style).pack(
+            side=tk.LEFT
+        )
+        tk.Radiobutton(quality_row, text="中", variable=self.quality_var, value="中", **rb_style).pack(
+            side=tk.LEFT
+        )
+        tk.Radiobutton(quality_row, text="低", variable=self.quality_var, value="低", **rb_style).pack(
+            side=tk.LEFT
+        )
 
         # 保存目录
         path_frame = tk.Frame(settings_inner, bg="#2f4153")
@@ -547,6 +587,9 @@ class VideoRecorderApp:
                 saved_wrapper = (config.get("jy_wrapper_path") or "").strip()
                 if saved_wrapper and os.path.exists(saved_wrapper):
                     self.jy_wrapper_path = saved_wrapper
+                saved_quality = (config.get("quality") or "").strip()
+                if saved_quality in ("高", "中", "低"):
+                    self.quality_level = saved_quality
             except Exception:
                 pass
 
@@ -574,6 +617,7 @@ class VideoRecorderApp:
                         "ffmpeg_path": self.ffmpeg_path,
                         "python_path": self.python_path,
                         "jy_wrapper_path": self.jy_wrapper_path,
+                        "quality": (self.quality_var.get() if hasattr(self, "quality_var") else self.quality_level),
                     },
                     f,
                     ensure_ascii=False,
@@ -1277,6 +1321,15 @@ class VideoRecorderApp:
         ffmpeg_exe = self._resolve_ffmpeg_exe() or "ffmpeg"
         cmd = [ffmpeg_exe, "-y", "-f", "gdigrab", "-framerate", "30", "-i", "desktop"]
 
+        # 清晰度映射：高更清晰但更吃 CPU/更大文件；低更省资源但更糊
+        q = (self.quality_var.get() or "中").strip()
+        if q == "高":
+            preset, crf = "slow", "18"
+        elif q == "低":
+            preset, crf = "veryfast", "23"
+        else:
+            preset, crf = "medium", "20"
+
         selected_audio = (self.audio_var.get() or "").strip()
         if selected_audio:
             route = self.audio_route.get(selected_audio) or {}
@@ -1291,9 +1344,24 @@ class VideoRecorderApp:
             # 关键：不要使用 -shortest。
             # 原因：在某些机器/驱动/ffmpeg 构建下，音频流会比视频更早结束（或先进入 EOF），
             # -shortest 会直接按“更短的那路”裁切输出，从而表现为“每次最后几秒没录上”。
-            cmd.extend(["-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-crf", "20"])
+            cmd.extend(
+                [
+                    "-c:v",
+                    "libx264",
+                    "-preset",
+                    preset,
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-crf",
+                    crf,
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "192k",
+                ]
+            )
         else:
-            cmd.extend(["-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20"])
+            cmd.extend(["-c:v", "libx264", "-preset", preset, "-pix_fmt", "yuv420p", "-crf", crf])
 
         # 让 MP4 索引更快可用（不影响时长，但提升兼容性）
         cmd.extend(["-movflags", "+faststart"])
