@@ -230,5 +230,46 @@ Write-Host ""
 if ($mode -eq "1" -and $version) {
   Write-LastReleaseVersion $version
 }
-Write-Host ("Build done: " + (Join-Path $PSScriptRoot (Join-Path $DISTPATH $APP_NAME))) -ForegroundColor Green
-Write-Host "Tip: zip and distribute the whole folder; target machines must have ffmpeg in PATH." -ForegroundColor Yellow
+
+# ---------------- 打包后处理：清理 logs 并生成 zip ----------------
+$APP_OUT_DIR = Join-Path $PSScriptRoot (Join-Path $DISTPATH $APP_NAME)
+
+# 将版本更新说明放到产物根目录（与 _internal 同级），并确保 zip 包含它
+$RELEASE_NOTES_SRC = Join-Path $PSScriptRoot "更新说明.md"
+if (Test-Path $RELEASE_NOTES_SRC) {
+  try {
+    Copy-Item -Force $RELEASE_NOTES_SRC (Join-Path $APP_OUT_DIR "更新说明.md")
+    Write-Host ("Copied release notes: " + $RELEASE_NOTES_SRC) -ForegroundColor DarkGray
+  } catch {
+    Write-Host ("Warning: failed to copy release notes: " + $RELEASE_NOTES_SRC) -ForegroundColor Yellow
+  }
+} else {
+  Write-Host ("Warning: missing release notes file: " + $RELEASE_NOTES_SRC) -ForegroundColor Yellow
+}
+
+# 产物目录里如果存在 logs（通常是运行后生成），release 包不携带它
+$LOGS_DIR_IN_APP = Join-Path $APP_OUT_DIR "logs"
+if (Test-Path $LOGS_DIR_IN_APP) {
+  try {
+    Remove-Item -Recurse -Force $LOGS_DIR_IN_APP
+    Write-Host ("Removed logs folder: " + $LOGS_DIR_IN_APP) -ForegroundColor DarkGray
+  } catch {
+    Write-Host ("Warning: failed to remove logs folder: " + $LOGS_DIR_IN_APP) -ForegroundColor Yellow
+  }
+}
+
+# 在 dist_out 同级生成 zip：dist_out\<APP_NAME>.zip
+$DIST_OUT_ROOT = Join-Path $PSScriptRoot ".\\dist_out"
+$ZIP_PATH = Join-Path $DIST_OUT_ROOT ($APP_NAME + ".zip")
+if (Test-Path $ZIP_PATH) {
+  try { Remove-Item -Force $ZIP_PATH } catch { }
+}
+try {
+  Compress-Archive -Path $APP_OUT_DIR -DestinationPath $ZIP_PATH -Force
+  Write-Host ("Zip created: " + $ZIP_PATH) -ForegroundColor Green
+} catch {
+  Write-Host ("Warning: failed to create zip: " + $ZIP_PATH) -ForegroundColor Yellow
+}
+
+Write-Host ("Build done: " + $APP_OUT_DIR) -ForegroundColor Green
+Write-Host "Tip: zip can be uploaded to Releases; target machines must have ffmpeg in PATH." -ForegroundColor Yellow
