@@ -1,4 +1,11 @@
-﻿$ErrorActionPreference = "Stop"
+﻿param(
+  [ValidateSet("release", "test")]
+  [string]$BuildMode = "",
+  [string]$ReleaseVersion = "",
+  [switch]$Yes
+)
+
+$ErrorActionPreference = "Stop"
 
 Set-Location -LiteralPath $PSScriptRoot
 
@@ -118,7 +125,9 @@ function Read-LastReleaseVersion {
 
 function Write-LastReleaseVersion([string]$v) {
   try {
-    Set-Content -LiteralPath $LAST_RELEASE_FILE -Value $v -Encoding utf8
+    # 避免写入 UTF-8 BOM（一些工具读出来会多出不可见字符）
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($LAST_RELEASE_FILE, $v, $utf8NoBom)
   } catch { }
 }
 
@@ -134,14 +143,25 @@ Write-Host ""
 Write-Host "请选择打包类型：" -ForegroundColor Cyan
 Write-Host ("  [1] 正式打包（需要输入版本号；上次 release = " + $lastRelease + "）")
 Write-Host "  [2] 测试打包（自动时间戳命名）"
-$mode = (Read-Host "输入 1 或 2").Trim()
-if ($mode -ne "1" -and $mode -ne "2") { $mode = "2" }
+$mode = ""
+if ($BuildMode -eq "release") {
+  $mode = "1"
+} elseif ($BuildMode -eq "test") {
+  $mode = "2"
+} else {
+  $mode = (Read-Host "输入 1 或 2").Trim()
+  if ($mode -ne "1" -and $mode -ne "2") { $mode = "2" }
+}
 
 $ts = Get-Date -Format "yyyyMMdd_HHmmss"
 $version = ""
 if ($mode -eq "1") {
-  $version = (Read-Host ("请输入本次正式版本号（回车默认 " + $lastRelease + "）")).Trim()
-  if (-not $version) { $version = $lastRelease }
+  if ($ReleaseVersion) {
+    $version = $ReleaseVersion.Trim()
+  } else {
+    $version = (Read-Host ("请输入本次正式版本号（回车默认 " + $lastRelease + "）")).Trim()
+    if (-not $version) { $version = $lastRelease }
+  }
   Assert-SemVer $version
   $APP_NAME = ($APP_BASE_NAME + "-" + $version)
 } else {
@@ -154,10 +174,12 @@ Write-Host ""
 Write-Host ("即将开始打包：") -ForegroundColor Cyan
 Write-Host ("  - 输出目录: " + (Join-Path $PSScriptRoot $DISTPATH))
 Write-Host ("  - EXE 名称: " + $APP_NAME + ".exe")
-$confirm = (Read-Host "确认继续？(Y/N)").Trim()
-if ($confirm -notin @("Y","y","YES","yes")) {
-  Write-Host "已取消。" -ForegroundColor Yellow
-  exit 0
+if (-not $Yes) {
+  $confirm = (Read-Host "确认继续？(Y/N)").Trim()
+  if ($confirm -notin @("Y","y","YES","yes")) {
+    Write-Host "已取消。" -ForegroundColor Yellow
+    exit 0
+  }
 }
 
 Write-Host "==> Building (onedir)..." -ForegroundColor Cyan

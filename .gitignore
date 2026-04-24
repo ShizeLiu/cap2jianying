@@ -12,6 +12,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 dist_out_*/
+dist_out/
 logs/
 *.log
 
